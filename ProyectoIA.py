@@ -4,9 +4,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 import io
+import os
 
 # Configurar página
 st.set_page_config(
@@ -282,6 +283,12 @@ if option == "📊 Dashboard":
         y_pred_pca = models['model_pca'].predict(models['x_test_pca'])
         report_pca = classification_report(models['y_test_pca'], y_pred_pca, output_dict=True)
         st.dataframe(pd.DataFrame(report_pca).transpose())
+        
+        if models['model_lda'] is not None:
+            st.subheader("Modelo LDA")
+            y_pred_lda = models['model_lda'].predict(models['x_test_lda'])
+            report_lda = classification_report(models['y_test_lda'], y_pred_lda, output_dict=True)
+            st.dataframe(pd.DataFrame(report_lda).transpose())
     
     # Matrices de confusión
     st.subheader("📊 Matrices de Confusión")
@@ -303,6 +310,16 @@ if option == "📊 Dashboard":
         cm_pca = confusion_matrix(models['y_test_pca'], models['model_pca'].predict(models['x_test_pca']))
         fig, ax = plt.subplots(figsize=(5, 4))
         sns.heatmap(cm_pca, annot=True, fmt='d', cmap='Greens', ax=ax)
+        ax.set_xlabel('Predicho')
+        ax.set_ylabel('Actual')
+        st.pyplot(fig)
+        plt.close()
+    
+    if models['model_lda'] is not None:
+        st.subheader("Modelo LDA")
+        cm_lda = confusion_matrix(models['y_test_lda'], models['model_lda'].predict(models['x_test_lda']))
+        fig, ax = plt.subplots(figsize=(5, 4))
+        sns.heatmap(cm_lda, annot=True, fmt='d', cmap='Reds', ax=ax)
         ax.set_xlabel('Predicho')
         ax.set_ylabel('Actual')
         st.pyplot(fig)
@@ -590,4 +607,14 @@ else:
     - **Accuracy**: {best_model[1]:.4f}
     - **Precisión en detección de fraude**: Modelo especializado para detectar transacciones fraudulentas
     """)
-   
+    
+    st.markdown("---")
+    st.markdown("### 📊 Estadísticas del Dataset Actual")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Registros", f"{len(df):,}")
+        st.metric("Características", f"{len(df.columns) - 1}")
+    with col2:
+        st.metric("Transacciones Fraudulentas", f"{df['fraud_flag'].sum():,}")
+        st.metric("Tasa de Fraude", f"{(df['fraud_flag'].sum()/len(df)*100):.2f}%")
