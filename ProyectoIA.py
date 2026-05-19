@@ -120,7 +120,7 @@ def train_models(df):
     # Copiar datos
     df_processed = df.copy()
     
-    # Codificar variables categóricas
+    # Codificar variables categóricas de manera individual
     categorical_cols = df_processed.select_dtypes(include=['object']).columns
     encoders = {}
     for col in categorical_cols:
@@ -240,7 +240,7 @@ if option == "📊 Dashboard":
         fraud_count = df['fraud_flag'].sum()
         st.metric("Transacciones Fraudulentas", f"{fraud_count:,}")
     with col3:
-        fraud_pct = (fraud_count / len(df)) * 100
+        fraud_pct = (fraud_count / len(df)) * 100 if len(df) > 0 else 0
         st.metric("% Fraude", f"{fraud_pct:.2f}%")
     with col4:
         st.metric("Modelo Principal", "Random Forest")
@@ -416,14 +416,14 @@ elif option == "🔍 Predicción Individual":
                     try:
                         input_df[col] = models['encoders'][col].transform(input_df[col].astype(str))
                     except ValueError:
-                        # Si el valor no está en el encoder, usar el más común
                         input_df[col] = 0
         
-        # Escalar variables numéricas
-        for col in models['numerical_cols']:
-            if col in input_df.columns:
-                input_df[col] = models['scaler'].transform(input_df[[col]])
+        # CORRECCIÓN AQUÍ: Escalar todas las variables numéricas juntas
+        input_df[models['numerical_cols']] = models['scaler'].transform(input_df[models['numerical_cols']])
         
+        # Reordenar las columnas del dataframe para que coincidan exactamente con x_test
+        input_df = input_df[models['x_test'].columns]
+
         # Predicción con el modelo original
         pred_orig = models['model'].predict(input_df)[0]
         prob_orig = models['model'].predict_proba(input_df)[0][1]
@@ -617,4 +617,4 @@ else:
         st.metric("Características", f"{len(df.columns) - 1}")
     with col2:
         st.metric("Transacciones Fraudulentas", f"{df['fraud_flag'].sum():,}")
-        st.metric("Tasa de Fraude", f"{(df['fraud_flag'].sum()/len(df)*100):.2f}%")
+        st.metric("Tasa de Fraude", f"{(df['fraud_flag'].sum()/len(df)*100):.2f}%" if len(df) > 0 else "0.00%")
