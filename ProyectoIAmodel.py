@@ -17,7 +17,7 @@ TEST_SIZE = 0.2
 def load_and_preprocess_data(use_sample=True):
     """Carga el dataset desde kagglehub o genera datos de ejemplo"""
     if use_sample:
-        # Generar datos de ejemplo (similar a app.py)
+        # Generar datos de ejemplo
         np.random.seed(42)
         n_samples = 10000
         
@@ -63,7 +63,7 @@ def load_and_preprocess_data(use_sample=True):
         upper_bound = Q3 + 1.5 * iqr
         df['anomaly_score'] = df['anomaly_score'].clip(lower_bound, upper_bound)
         
-        return df, StandardScaler(), LabelEncoder()
+        return df
     
     else:
         # Cargar datos reales de Kaggle
@@ -80,45 +80,39 @@ def load_and_preprocess_data(use_sample=True):
             upper_bound = Q3 + 1.5 * iqr
             df['anomaly_score'] = df['anomaly_score'].clip(lower_bound, upper_bound)
             
-            return df, StandardScaler(), LabelEncoder()
+            return df
         except Exception as e:
             print(f"Error cargando datos de Kaggle: {e}")
             print("Usando datos de ejemplo como fallback")
             return load_and_preprocess_data(use_sample=True)
 
-def prepare_features(df, scaler=None, encoder=None):
+def prepare_features(df):
     """Prepara X e y para el modelo"""
-    # Codificar variables categóricas si no se proporciona encoder
-    categorical_cols = df.select_dtypes(include=['object']).columns
+    df_encoded = df.copy()
+    categorical_cols = df_encoded.select_dtypes(include=['object']).columns
     
-    if encoder is None:
-        encoder = LabelEncoder()
-        df_encoded = df.copy()
-        for col in categorical_cols:
-            df_encoded[col] = encoder.fit_transform(df_encoded[col].astype(str))
-    else:
-        df_encoded = df.copy()
-        for col in categorical_cols:
-            df_encoded[col] = encoder.transform(df_encoded[col].astype(str))
+    # CORRECCIÓN AQUÍ: Diccionario de encoders individuales por columna
+    encoders = {}
+    for col in categorical_cols:
+        le = LabelEncoder()
+        df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+        encoders[col] = le
     
     # Escalar variables numéricas
     numerical_cols = df_encoded.select_dtypes(include=['int64', 'float64']).columns
     numerical_cols = [col for col in numerical_cols if col != 'fraud_flag']
     
-    if scaler is None:
-        scaler = StandardScaler()
-        df_encoded[numerical_cols] = scaler.fit_transform(df_encoded[numerical_cols])
-    else:
-        df_encoded[numerical_cols] = scaler.transform(df_encoded[numerical_cols])
+    scaler = StandardScaler()
+    df_encoded[numerical_cols] = scaler.fit_transform(df_encoded[numerical_cols])
     
     X = df_encoded.drop(columns=['fraud_flag'])
     y = df_encoded['fraud_flag']
     
-    return X, y, scaler, encoder, numerical_cols, categorical_cols
+    return X, y, scaler, encoders, numerical_cols, categorical_cols
 
 def train_models_pipeline(df):
     """Entrena los modelos PCA, LDA y original"""
-    X, y, scaler, encoder, numerical_cols, categorical_cols = prepare_features(df)
+    X, y, scaler, encoders, numerical_cols, categorical_cols = prepare_features(df)
     
     # Dividir datos
     x_train, x_test, y_train, y_test = train_test_split(
@@ -194,7 +188,7 @@ def train_models_pipeline(df):
         'pca': pca,
         'lda': lda,
         'scaler': scaler,
-        'encoder': encoder,
+        'encoders': encoders,
         'numerical_cols': numerical_cols,
         'categorical_cols': categorical_cols,
         'x_test': x_test,
@@ -214,40 +208,15 @@ def save_models(models_dict, model_dir='models'):
     joblib.dump(models_dict['pca'], f'{model_dir}/pca.pkl')
     joblib.dump(models_dict['lda'], f'{model_dir}/lda.pkl')
     joblib.dump(models_dict['scaler'], f'{model_dir}/scaler.pkl')
-    joblib.dump(models_dict['encoder'], f'{model_dir}/encoder.pkl')
+    joblib.dump(models_dict['encoders'], f'{model_dir}/encoders.pkl')
     joblib.dump(models_dict['numerical_cols'], f'{model_dir}/numerical_cols.pkl')
     joblib.dump(models_dict['categorical_cols'], f'{model_dir}/categorical_cols.pkl')
     
     print(f"Modelos guardados en '{model_dir}/'")
 
-def load_models(model_dir='models'):
-    """Carga los modelos desde archivos"""
-    model_orig = joblib.load(f'{model_dir}/random_forest_original.pkl')
-    model_pca = joblib.load(f'{model_dir}/random_forest_pca.pkl')
-    model_lda = joblib.load(f'{model_dir}/random_forest_lda.pkl')
-    pca = joblib.load(f'{model_dir}/pca.pkl')
-    lda = joblib.load(f'{model_dir}/lda.pkl')
-    scaler = joblib.load(f'{model_dir}/scaler.pkl')
-    encoder = joblib.load(f'{model_dir}/encoder.pkl')
-    numerical_cols = joblib.load(f'{model_dir}/numerical_cols.pkl')
-    categorical_cols = joblib.load(f'{model_dir}/categorical_cols.pkl')
-    
-    return {
-        'model_orig': model_orig,
-        'model_pca': model_pca,
-        'model_lda': model_lda,
-        'pca': pca,
-        'lda': lda,
-        'scaler': scaler,
-        'encoder': encoder,
-        'numerical_cols': numerical_cols,
-        'categorical_cols': categorical_cols
-    }
-
 if __name__ == "__main__":
-    # Entrenar y guardar modelos
     print("Cargando datos...")
-    df, _, _ = load_and_preprocess_data(use_sample=True)
+    df = load_and_preprocess_data(use_sample=True)
     print(f"Datos cargados: {df.shape}")
     
     print("Entrenando modelos...")
