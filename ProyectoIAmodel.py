@@ -7,7 +7,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 import kagglehub
-from kagglehub import KaggleDatasetAdapter
 import joblib
 import os
 
@@ -15,108 +14,178 @@ import os
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
-def load_and_preprocess_data():
-    """Carga el dataset desde kagglehub y aplica preprocesamiento básico"""
-    # Cargar datos
-    file_path = "banking_transactions.csv"
-    df = kagglehub.load_dataset(
-        KaggleDatasetAdapter.PANDAS,
-        "deepeshkansotia/banking-fraud-detection-and-risk-analytics-dataset",
-        file_path,
-    )
+def load_and_preprocess_data(use_sample=True):
+    """Carga el dataset desde kagglehub o genera datos de ejemplo"""
+    if use_sample:
+        # Generar datos de ejemplo (similar a app.py)
+        np.random.seed(42)
+        n_samples = 10000
+        
+        data = {
+            'transaction_amount': np.random.exponential(10000, n_samples),
+            'login_attempts': np.random.poisson(2, n_samples),
+            'device_risk_score': np.random.uniform(0, 100, n_samples),
+            'transfer_frequency': np.random.poisson(30, n_samples),
+            'anomaly_score': np.random.beta(2, 5, n_samples),
+            'account_age_days': np.random.exponential(1000, n_samples),
+            'transaction_time_hour': np.random.randint(0, 24, n_samples),
+            'failed_transactions_last_30d': np.random.poisson(2, n_samples),
+            'avg_monthly_balance': np.random.exponential(500000, n_samples),
+            'daily_transaction_count': np.random.poisson(50, n_samples),
+            'geo_distance_km': np.random.exponential(1000, n_samples),
+            'session_duration_minutes': np.random.exponential(30, n_samples),
+            'transaction_velocity_score': np.random.uniform(0, 100, n_samples),
+            'payment_channel': np.random.choice(['ATM', 'Mobile App', 'POS Terminal', 'Web Banking'], n_samples),
+            'authentication_type': np.random.choice(['Biometric', 'OTP', 'Password Only'], n_samples),
+            'card_present_flag': np.random.choice([0, 1], n_samples),
+            'international_transaction_flag': np.random.choice([0, 1], n_samples, p=[0.9, 0.1]),
+            'suspicious_ip_flag': np.random.choice([0, 1], n_samples, p=[0.95, 0.05])
+        }
+        
+        df = pd.DataFrame(data)
+        
+        # Generar etiqueta de fraude
+        fraud_prob = (
+            (df['anomaly_score'] > 0.7) * 0.3 +
+            (df['login_attempts'] > 5) * 0.2 +
+            (df['suspicious_ip_flag'] == 1) * 0.2 +
+            (df['international_transaction_flag'] == 1) * 0.15 +
+            (df['transaction_amount'] > 50000) * 0.15
+        )
+        
+        df['fraud_flag'] = (np.random.random(n_samples) < fraud_prob).astype(int)
+        
+        # Limitar outliers
+        Q1 = df['anomaly_score'].quantile(0.25)
+        Q3 = df['anomaly_score'].quantile(0.75)
+        iqr = Q3 - Q1
+        lower_bound = Q1 - 1.5 * iqr
+        upper_bound = Q3 + 1.5 * iqr
+        df['anomaly_score'] = df['anomaly_score'].clip(lower_bound, upper_bound)
+        
+        return df, StandardScaler(), LabelEncoder()
     
-    # Eliminar outliers de anomaly_score
-    Q1 = df['anomaly_score'].quantile(0.25)
-    Q3 = df['anomaly_score'].quantile(0.75)
-    iqr = Q3 - Q1
-    lower_bound = Q1 - 1.5 * iqr
-    upper_bound = Q3 + 1.5 * iqr
-    df_clip = df.copy()
-    df_clip['anomaly_score'] = df_clip['anomaly_score'].clip(lower_bound, upper_bound)
-    df['anomaly_score'] = df_clip['anomaly_score']
+    else:
+        # Cargar datos reales de Kaggle
+        try:
+            path = kagglehub.dataset_download("deepeshkansotia/banking-fraud-detection-and-risk-analytics-dataset")
+            file_path = "banking_transactions.csv"
+            df = pd.read_csv(os.path.join(path, file_path))
+            
+            # Limpiar outliers
+            Q1 = df['anomaly_score'].quantile(0.25)
+            Q3 = df['anomaly_score'].quantile(0.75)
+            iqr = Q3 - Q1
+            lower_bound = Q1 - 1.5 * iqr
+            upper_bound = Q3 + 1.5 * iqr
+            df['anomaly_score'] = df['anomaly_score'].clip(lower_bound, upper_bound)
+            
+            return df, StandardScaler(), LabelEncoder()
+        except Exception as e:
+            print(f"Error cargando datos de Kaggle: {e}")
+            print("Usando datos de ejemplo como fallback")
+            return load_and_preprocess_data(use_sample=True)
+
+def prepare_features(df, scaler=None, encoder=None):
+    """Prepara X e y para el modelo"""
+    # Codificar variables categóricas si no se proporciona encoder
+    categorical_cols = df.select_dtypes(include=['object']).columns
     
-    # Codificar variables categóricas
-    encoder = LabelEncoder()
-    categorical = df.select_dtypes(include=['object']).columns
-    for col in categorical:
-        df[col] = encoder.fit_transform(df[col])
+    if encoder is None:
+        encoder = LabelEncoder()
+        df_encoded = df.copy()
+        for col in categorical_cols:
+            df_encoded[col] = encoder.fit_transform(df_encoded[col].astype(str))
+    else:
+        df_encoded = df.copy()
+        for col in categorical_cols:
+            df_encoded[col] = encoder.transform(df_encoded[col].astype(str))
     
     # Escalar variables numéricas
-    scaler = StandardScaler()
-    numerical = df.select_dtypes(include=['int64', 'float64']).columns
-    for col in numerical:
-        df[col] = scaler.fit_transform(df[[col]])
+    numerical_cols = df_encoded.select_dtypes(include=['int64', 'float64']).columns
+    numerical_cols = [col for col in numerical_cols if col != 'fraud_flag']
     
-    return df, scaler, encoder
+    if scaler is None:
+        scaler = StandardScaler()
+        df_encoded[numerical_cols] = scaler.fit_transform(df_encoded[numerical_cols])
+    else:
+        df_encoded[numerical_cols] = scaler.transform(df_encoded[numerical_cols])
+    
+    X = df_encoded.drop(columns=['fraud_flag'])
+    y = df_encoded['fraud_flag']
+    
+    return X, y, scaler, encoder, numerical_cols, categorical_cols
 
-def prepare_features(df):
-    """Prepara X e y para el modelo"""
-    X = df.drop(columns=['fraud_flag'])
-    y = df['fraud_flag']
-    return X, y
-
-def apply_pca(X, n_components=17):
-    """Aplica PCA a las características numéricas"""
-    numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns
-    pca = PCA(n_components=n_components)
-    X_pca = pca.fit_transform(X[numerical_cols])
-    return X_pca, pca
-
-def apply_lda(X, y, n_components=1):
-    """Aplica LDA a las características numéricas"""
-    numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns
-    lda = LDA(n_components=n_components)
-    X_lda = lda.fit_transform(X[numerical_cols], y)
-    return X_lda, lda
-
-def get_categorical_features(X):
-    """Obtiene las características categóricas"""
-    categorical_cols = X.select_dtypes(include=['int64', 'float64']).columns
-    # Nota: Después de codificar, las categóricas también son numéricas
-    # Por simplicidad, usamos todas las columnas
-    return X
-
-def train_model(X, y, model_type='original'):
-    """Entrena el modelo Random Forest"""
+def train_models_pipeline(df):
+    """Entrena los modelos PCA, LDA y original"""
+    X, y, scaler, encoder, numerical_cols, categorical_cols = prepare_features(df)
+    
     # Dividir datos
     x_train, x_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
     
-    # Configurar y entrenar modelo
-    model = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=20,
+    # Modelo Original
+    model_orig = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=15,
         min_samples_split=5,
         min_samples_leaf=2,
         max_features='sqrt',
         bootstrap=True,
         class_weight='balanced',
-        random_state=RANDOM_STATE
+        random_state=RANDOM_STATE,
+        n_jobs=-1
     )
-    model.fit(x_train, y_train)
+    model_orig.fit(x_train, y_train)
     
-    return model, x_test, y_test
-
-def train_models_pipeline(df):
-    """Entrena los modelos PCA, LDA y original"""
-    X, y = prepare_features(df)
+    # PCA
+    n_components = min(10, len(numerical_cols))
+    pca = PCA(n_components=n_components)
+    X_pca_train = pca.fit_transform(x_train[numerical_cols])
+    X_pca_test = pca.transform(x_test[numerical_cols])
     
-    # Obtener características categóricas
-    categorical_cols = X.select_dtypes(include=['int64', 'float64']).columns
+    # Combinar PCA con características categóricas
+    categorical_train = x_train[categorical_cols].values if len(categorical_cols) > 0 else np.array([]).reshape(len(x_train), 0)
+    categorical_test = x_test[categorical_cols].values if len(categorical_cols) > 0 else np.array([]).reshape(len(x_test), 0)
     
-    # Modelo Original
-    model_orig, x_test_orig, y_test_orig = train_model(X, y, 'original')
+    if len(categorical_cols) > 0:
+        X_pca_train_combined = np.concatenate([X_pca_train, categorical_train], axis=1)
+        X_pca_test_combined = np.concatenate([X_pca_test, categorical_test], axis=1)
+    else:
+        X_pca_train_combined = X_pca_train
+        X_pca_test_combined = X_pca_test
     
-    # Modelo PCA
-    X_pca, pca = apply_pca(X)
-    X_pca_combined = np.concatenate((X_pca, X[categorical_cols]), axis=1)
-    model_pca, x_test_pca, y_test_pca = train_model(X_pca_combined, y, 'pca')
+    model_pca = RandomForestClassifier(
+        n_estimators=100, max_depth=15, min_samples_split=5,
+        min_samples_leaf=2, max_features='sqrt', bootstrap=True,
+        class_weight='balanced', random_state=RANDOM_STATE, n_jobs=-1
+    )
+    model_pca.fit(X_pca_train_combined, y_train)
     
-    # Modelo LDA
-    X_lda, lda = apply_lda(X, y)
-    X_lda_combined = np.concatenate((X_lda, X[categorical_cols]), axis=1)
-    model_lda, x_test_lda, y_test_lda = train_model(X_lda_combined, y, 'lda')
+    # LDA
+    if len(np.unique(y)) >= 2:
+        lda = LDA(n_components=1)
+        X_lda_train = lda.fit_transform(x_train[numerical_cols], y_train)
+        X_lda_test = lda.transform(x_test[numerical_cols])
+        
+        if len(categorical_cols) > 0:
+            X_lda_train_combined = np.concatenate([X_lda_train, categorical_train], axis=1)
+            X_lda_test_combined = np.concatenate([X_lda_test, categorical_test], axis=1)
+        else:
+            X_lda_train_combined = X_lda_train
+            X_lda_test_combined = X_lda_test
+        
+        model_lda = RandomForestClassifier(
+            n_estimators=100, max_depth=15, min_samples_split=5,
+            min_samples_leaf=2, max_features='sqrt', bootstrap=True,
+            class_weight='balanced', random_state=RANDOM_STATE, n_jobs=-1
+        )
+        model_lda.fit(X_lda_train_combined, y_train)
+    else:
+        model_lda = None
+        lda = None
+        X_lda_test_combined = None
     
     return {
         'model_orig': model_orig,
@@ -124,13 +193,14 @@ def train_models_pipeline(df):
         'model_lda': model_lda,
         'pca': pca,
         'lda': lda,
-        'x_test_orig': x_test_orig,
-        'y_test_orig': y_test_orig,
-        'x_test_pca': x_test_pca,
-        'y_test_pca': y_test_pca,
-        'x_test_lda': x_test_lda,
-        'y_test_lda': y_test_lda,
-        'categorical_cols': categorical_cols
+        'scaler': scaler,
+        'encoder': encoder,
+        'numerical_cols': numerical_cols,
+        'categorical_cols': categorical_cols,
+        'x_test': x_test,
+        'y_test': y_test,
+        'x_test_pca': X_pca_test_combined,
+        'x_test_lda': X_lda_test_combined if model_lda else None
     }
 
 def save_models(models_dict, model_dir='models'):
@@ -143,6 +213,9 @@ def save_models(models_dict, model_dir='models'):
     joblib.dump(models_dict['model_lda'], f'{model_dir}/random_forest_lda.pkl')
     joblib.dump(models_dict['pca'], f'{model_dir}/pca.pkl')
     joblib.dump(models_dict['lda'], f'{model_dir}/lda.pkl')
+    joblib.dump(models_dict['scaler'], f'{model_dir}/scaler.pkl')
+    joblib.dump(models_dict['encoder'], f'{model_dir}/encoder.pkl')
+    joblib.dump(models_dict['numerical_cols'], f'{model_dir}/numerical_cols.pkl')
     joblib.dump(models_dict['categorical_cols'], f'{model_dir}/categorical_cols.pkl')
     
     print(f"Modelos guardados en '{model_dir}/'")
@@ -154,6 +227,9 @@ def load_models(model_dir='models'):
     model_lda = joblib.load(f'{model_dir}/random_forest_lda.pkl')
     pca = joblib.load(f'{model_dir}/pca.pkl')
     lda = joblib.load(f'{model_dir}/lda.pkl')
+    scaler = joblib.load(f'{model_dir}/scaler.pkl')
+    encoder = joblib.load(f'{model_dir}/encoder.pkl')
+    numerical_cols = joblib.load(f'{model_dir}/numerical_cols.pkl')
     categorical_cols = joblib.load(f'{model_dir}/categorical_cols.pkl')
     
     return {
@@ -162,59 +238,22 @@ def load_models(model_dir='models'):
         'model_lda': model_lda,
         'pca': pca,
         'lda': lda,
+        'scaler': scaler,
+        'encoder': encoder,
+        'numerical_cols': numerical_cols,
         'categorical_cols': categorical_cols
     }
 
-def predict_fraud(model_type, input_data, models_dict, scaler=None):
-    """
-    Realiza predicción de fraude
+if __name__ == "__main__":
+    # Entrenar y guardar modelos
+    print("Cargando datos...")
+    df, _, _ = load_and_preprocess_data(use_sample=True)
+    print(f"Datos cargados: {df.shape}")
     
-    Args:
-        model_type: 'original', 'pca', o 'lda'
-        input_data: Diccionario con los datos de entrada
-        models_dict: Diccionario con modelos cargados
-        scaler: Scaler para normalizar datos (opcional)
+    print("Entrenando modelos...")
+    models = train_models_pipeline(df)
     
-    Returns:
-        Predicción (0 o 1) y probabilidad
-    """
-    # Convertir input_data a DataFrame
-    input_df = pd.DataFrame([input_data])
+    print("Guardando modelos...")
+    save_models(models)
     
-    # Escalar si es necesario (esto requiere el scaler guardado)
-    if scaler:
-        numerical_cols = input_df.select_dtypes(include=['int64', 'float64']).columns
-        for col in numerical_cols:
-            input_df[col] = scaler.transform(input_df[[col]])
-    
-    # Seleccionar modelo
-    if model_type == 'original':
-        model = models_dict['model_orig']
-        X_input = input_df
-    elif model_type == 'pca':
-        model = models_dict['model_pca']
-        pca = models_dict['pca']
-        categorical_cols = models_dict['categorical_cols']
-        numerical = input_df.select_dtypes(include=['int64', 'float64']).columns
-        X_pca = pca.transform(input_df[numerical])
-        X_input = np.concatenate((X_pca, input_df[categorical_cols]), axis=1)
-    elif model_type == 'lda':
-        model = models_dict['model_lda']
-        lda = models_dict['lda']
-        categorical_cols = models_dict['categorical_cols']
-        numerical = input_df.select_dtypes(include=['int64', 'float64']).columns
-        X_lda = lda.transform(input_df[numerical])
-        X_input = np.concatenate((X_lda, input_df[categorical_cols]), axis=1)
-    else:
-        raise ValueError("model_type debe ser 'original', 'pca' o 'lda'")
-    
-    # Predicción
-    prediction = model.predict(X_input)[0]
-    probability = model.predict_proba(X_input)[0][1]
-    
-    return prediction, probability
-
-# Alias para mantener compatibilidad con el notebook
-model_pca = None
-model_lda = None
-model_X = None
+    print("¡Proceso completado!")
