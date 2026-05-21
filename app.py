@@ -1,5 +1,6 @@
 # app.py - Sistema de Detección de Fraude Bancario
 # VERSION SIN EMOJIS NI STICKERS - PCA ILIMITADO, LDA FIJO 1 COMPONENTE
+# SIN PASO 4 DE PREDICCIONES
 
 import streamlit as st
 import pandas as pd
@@ -530,117 +531,12 @@ if st.session_state.model_trained and st.session_state.step == 3:
             st.pyplot(fig)
             plt.close()
     
-    # Botones
+    # Botón de reinicio (sin botón de predicciones)
     st.markdown("---")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Reiniciar", use_container_width=True):
-            for key in ['df', 'model_trained', 'models', 'step', 'convert_to_binary']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
-    
-    with col2:
-        if st.button("Hacer Predicciones", type="primary", use_container_width=True):
-            st.session_state.step = 4
-            st.rerun()
-
-# ==================== PASO 4: PREDICCIONES ====================
-if st.session_state.model_trained and st.session_state.step == 4:
-    st.header("Paso 4: Prediccion")
-    
-    models = st.session_state.models
-    df = st.session_state.df
-    
-    with st.form("prediction_form"):
-        col1, col2 = st.columns(2)
-        input_data = {}
-        
-        with col1:
-            st.markdown("**Variables Numericas**")
-            for feature in models['selected_numeric']:
-                default_val = float(df[feature].mean()) if feature in df.columns else 0.0
-                input_data[feature] = st.number_input(
-                    f"{feature}:",
-                    value=default_val,
-                    step=0.1,
-                    format="%.2f",
-                    key=f"num_{feature}"
-                )
-        
-        with col2:
-            if models['selected_categorical']:
-                st.markdown("**Variables Categoricas**")
-                for feature in models['selected_categorical']:
-                    if feature in df.columns:
-                        unique_values = df[feature].dropna().unique().tolist()
-                        input_data[feature] = st.selectbox(
-                            f"{feature}:",
-                            unique_values,
-                            key=f"cat_{feature}"
-                        )
-        
-        submitted = st.form_submit_button("Predecir", use_container_width=True, type="primary")
-        
-        if submitted:
-            try:
-                input_df = pd.DataFrame([input_data])
-                
-                for col in models['selected_categorical']:
-                    if col in models['encoders']:
-                        input_df[col] = models['encoders'][col].transform(input_df[col].astype(str))
-                
-                if models['selected_numeric']:
-                    input_df[models['selected_numeric']] = models['scaler'].transform(input_df[models['selected_numeric']])
-                
-                input_df = input_df[models['selected_features']]
-                
-                if models['reduction_method'] != "Ninguna" and models['reduction_obj'] is not None:
-                    input_df = models['reduction_obj'].transform(input_df)
-                
-                prediction = models['model'].predict(input_df)[0]
-                
-                st.markdown("---")
-                
-                if models['is_binary'] and hasattr(models['model'], "predict_proba"):
-                    proba = models['model'].predict_proba(input_df)[0]
-                    prob_positive = proba[1] if len(proba) > 1 else proba[0]
-                    
-                    if prediction == 1:
-                        st.error(f"""
-                        ### Prediccion: FRAUDE
-                        
-                        | Metrica | Valor |
-                        |---|---|
-                        | **Prediccion** | Fraude (Clase 1) |
-                        | **Confianza** | {prob_positive:.1%} |
-                        | **Modelo** | {models['model_type']} |
-                        """)
-                    else:
-                        st.success(f"""
-                        ### Prediccion: LEGITIMO
-                        
-                        | Metrica | Valor |
-                        |---|---|
-                        | **Prediccion** | Legitimo (Clase 0) |
-                        | **Confianza** | {1-prob_positive:.1%} |
-                        | **Modelo** | {models['model_type']} |
-                        """)
-                else:
-                    st.info(f"""
-                    ### Resultado
-                    
-                    **Prediccion:** {prediction}
-                    **Modelo:** {models['model_type']}
-                    """)
-                
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-    
-    st.markdown("---")
-    if st.button("Volver"):
-        st.session_state.step = 3
+    if st.button("Reiniciar", use_container_width=True):
+        for key in ['df', 'model_trained', 'models', 'step', 'convert_to_binary']:
+            if key in st.session_state:
+                del st.session_state[key]
         st.rerun()
 
 # Footer
