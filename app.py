@@ -1,5 +1,5 @@
 # app.py - Sistema de Detección de Fraude Bancario
-# VERSIÓN CORREGIDA: Naive Bayes + Métricas legibles + Gráficas pequeñas
+# VERSIÓN SIN EMOJIS
 
 import streamlit as st
 import pandas as pd
@@ -9,12 +9,11 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
+from sklearn.naive_bayes import GaussianNB, BernoulliNB
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, 
-                           confusion_matrix, classification_report, roc_auc_score, 
-                           roc_curve)
+                           confusion_matrix, roc_auc_score, roc_curve)
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
@@ -29,13 +28,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo para gráficas más pequeñas
+# Estilo
 st.markdown("""
 <style>
     [data-testid="stImage"] {
-        max-width: 100%;
-    }
-    .stPlotlyChart {
         max-width: 100%;
     }
     .metric-card {
@@ -56,32 +52,32 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== INICIALIZACIÓN DE ESTADO ====================
+# Inicialización de estado
 if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False
     st.session_state.df = None
     st.session_state.models = None
     st.session_state.step = 1
 
-# ==================== TÍTULO ====================
-st.title("🔍 Sistema de Detección de Fraude Bancario")
+# Título
+st.title("Sistema de Detección de Fraude Bancario")
 st.markdown("---")
 
 # ==================== PASO 1: CARGA DE DATOS ====================
-st.header("📊 Paso 1: Carga de Datos")
+st.header("Paso 1: Carga de Datos")
 
 with st.container():
     data_source = st.radio(
         "Selecciona la fuente de datos:",
-        ["📊 Datos de Ejemplo", "📁 Subir CSV", "🌐 Kaggle Dataset"],
+        ["Datos de Ejemplo", "Subir CSV", "Kaggle Dataset"],
         horizontal=True,
         key="data_source"
     )
 
 if st.session_state.df is None:
     
-    if data_source == "📊 Datos de Ejemplo":
-        if st.button("🎲 Generar datos de ejemplo", use_container_width=True):
+    if data_source == "Datos de Ejemplo":
+        if st.button("Generar datos de ejemplo", use_container_width=True):
             with st.spinner("Generando datos..."):
                 try:
                     n_samples = 3000
@@ -118,33 +114,33 @@ if st.session_state.df is None:
                     st.session_state.step = 2
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
+                    st.error(f"Error: {str(e)}")
     
-    elif data_source == "📁 Subir CSV":
-        uploaded_file = st.file_uploader("Arrastra o selecciona un archivo CSV", type=['csv'])
+    elif data_source == "Subir CSV":
+        uploaded_file = st.file_uploader("Selecciona un archivo CSV", type=['csv'])
         if uploaded_file:
             try:
                 df = pd.read_csv(uploaded_file)
                 if df is not None and len(df) > 0:
                     st.session_state.df = df
                     st.session_state.step = 2
-                    st.success(f"✅ Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas")
+                    st.success(f"Datos cargados: {df.shape[0]} filas, {df.shape[1]} columnas")
                     st.rerun()
                 else:
-                    st.error("❌ El archivo está vacío")
+                    st.error("El archivo está vacío")
             except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+                st.error(f"Error: {str(e)}")
     
     else:
-        st.info("🔗 Para usar datasets de Kaggle:")
+        st.info("Para usar datasets de Kaggle:")
         st.markdown("""
-        1. Ve a [Kaggle Datasets](https://www.kaggle.com/datasets)
-        2. Copia el path (ejemplo: `mlg-od/credit-card-fraud`)
+        1. Ve a Kaggle Datasets
+        2. Copia el path (ejemplo: mlg-od/credit-card-fraud)
         3. Pega el path abajo
         """)
         kaggle_path = st.text_input("Path del dataset:", placeholder="mlg-od/credit-card-fraud")
         
-        if st.button("📥 Cargar desde Kaggle", use_container_width=True):
+        if st.button("Cargar desde Kaggle", use_container_width=True):
             if kaggle_path:
                 with st.spinner("Descargando..."):
                     try:
@@ -156,35 +152,33 @@ if st.session_state.df is None:
                                     df = pd.read_csv(os.path.join(root, file))
                                     st.session_state.df = df
                                     st.session_state.step = 2
-                                    st.success(f"✅ Dataset cargado: {df.shape[0]} filas")
+                                    st.success(f"Dataset cargado: {df.shape[0]} filas")
                                     st.rerun()
                                     break
                             if st.session_state.df is not None:
                                 break
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        st.error(f"Error: {str(e)}")
             else:
-                st.warning("⚠️ Ingresa un path válido")
+                st.warning("Ingresa un path válido")
 
-# ==================== PASO 2: SELECCIÓN DE FEATURES ====================
+# ==================== PASO 2: CONFIGURACIÓN ====================
 if st.session_state.df is not None and st.session_state.step == 2 and not st.session_state.model_trained:
-    st.header("📊 Paso 2: Configuración del Modelo")
+    st.header("Paso 2: Configuración del Modelo")
     
     df = st.session_state.df
     
-    # Vista previa
-    with st.expander("🔍 Vista previa de los datos"):
+    with st.expander("Vista previa de los datos"):
         st.dataframe(df.head(10), use_container_width=True)
     
     # Selección de columna objetivo
-    st.subheader("🎯 Selecciona la columna objetivo")
+    st.subheader("Columna objetivo")
     
     target_column = st.selectbox(
-        "Columna objetivo:",
+        "Selecciona la columna a predecir:",
         df.columns
     )
     
-    # Mostrar información
     unique_values = df[target_column].nunique()
     st.write(f"**Valores únicos:** {unique_values}")
     
@@ -194,7 +188,6 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
             pct = (count / len(df)) * 100
             st.write(f"- {val}: {count} ({pct:.1f}%)")
     
-    # Opción para convertir a binario
     if unique_values > 2:
         convert_to_binary = st.checkbox("Convertir a binario (0/1)")
         if convert_to_binary:
@@ -202,7 +195,7 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
             st.info(f"Valor más frecuente '{most_frequent}' → 0, otros → 1")
     
     # Selección de features
-    st.subheader("🔧 Características")
+    st.subheader("Características")
     
     all_cols = df.columns.tolist()
     if target_column in all_cols:
@@ -233,11 +226,11 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
     selected_features = selected_numeric + selected_categorical
     
     if not selected_features:
-        st.warning("⚠️ Selecciona al menos una característica")
+        st.warning("Selecciona al menos una característica")
         st.stop()
     
     # Configuración del modelo
-    st.subheader("⚙️ Configuración")
+    st.subheader("Configuración")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -263,13 +256,12 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
             n_components = 3
     
     # Botón de entrenamiento
-    if st.button("🚀 Entrenar Modelo", type="primary", use_container_width=True):
+    if st.button("Entrenar Modelo", type="primary", use_container_width=True):
         with st.spinner("Entrenando..."):
             try:
                 X = df[selected_features].copy()
                 y = df[target_column].copy()
                 
-                # Convertir target si es necesario
                 if 'convert_to_binary' in locals() and convert_to_binary and unique_values > 2:
                     most_frequent = df[target_column].mode()[0]
                     y = (y != most_frequent).astype(int)
@@ -309,10 +301,8 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                             X_train = reduction_obj.fit_transform(X_train, y_train)
                             X_test = reduction_obj.transform(X_test)
                         else:
-                            st.warning("⚠️ LDA no disponible, usando datos originales")
                             reduction_method = "Ninguna"
-                    except Exception as e:
-                        st.warning(f"⚠️ LDA no disponible: {str(e)[:50]}")
+                    except Exception:
                         reduction_method = "Ninguna"
                 
                 # Modelo
@@ -322,11 +312,10 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                     model = LogisticRegression(random_state=42, max_iter=1000)
                 elif model_type == "Decision Tree":
                     model = DecisionTreeClassifier(max_depth=10, random_state=42)
-                else:  # Naive Bayes
+                else:
                     if reduction_method != "Ninguna" or len(selected_numeric) > 0:
                         model = GaussianNB()
                     else:
-                        # Para datos categóricos puros
                         model = BernoulliNB()
                 
                 model.fit(X_train, y_train)
@@ -384,25 +373,25 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                 st.rerun()
                 
             except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+                st.error(f"Error: {str(e)}")
 
-# ==================== PASO 3: MÉTRICAS ====================
+# ==================== PASO 3: RESULTADOS ====================
 if st.session_state.model_trained and st.session_state.step == 3:
-    st.header("📊 Paso 3: Resultados del Modelo")
+    st.header("Paso 3: Resultados del Modelo")
     
     models = st.session_state.models
     
     # Información
     st.info(f"**Modelo:** {models['model_type']} | **Reducción:** {models['reduction_method']} | **Target:** {models['target_column']}")
     
-    # Métricas en grid
+    # Métricas
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         color = "#2ecc71" if models['accuracy'] > 0.8 else "#f39c12" if models['accuracy'] > 0.6 else "#e74c3c"
         st.markdown(f"""
         <div class="metric-card">
-            <h3>🎯 Accuracy</h3>
+            <h3>Accuracy</h3>
             <h2 style="color:{color}">{models['accuracy']:.1%}</h2>
         </div>
         """, unsafe_allow_html=True)
@@ -411,7 +400,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         color = "#2ecc71" if models['precision'] > 0.8 else "#f39c12" if models['precision'] > 0.6 else "#e74c3c"
         st.markdown(f"""
         <div class="metric-card">
-            <h3>⚡ Precision</h3>
+            <h3>Precision</h3>
             <h2 style="color:{color}">{models['precision']:.1%}</h2>
         </div>
         """, unsafe_allow_html=True)
@@ -420,7 +409,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         color = "#2ecc71" if models['recall'] > 0.8 else "#f39c12" if models['recall'] > 0.6 else "#e74c3c"
         st.markdown(f"""
         <div class="metric-card">
-            <h3>🔍 Recall</h3>
+            <h3>Recall</h3>
             <h2 style="color:{color}">{models['recall']:.1%}</h2>
         </div>
         """, unsafe_allow_html=True)
@@ -429,19 +418,18 @@ if st.session_state.model_trained and st.session_state.step == 3:
         color = "#2ecc71" if models['f1'] > 0.8 else "#f39c12" if models['f1'] > 0.6 else "#e74c3c"
         st.markdown(f"""
         <div class="metric-card">
-            <h3>📊 F1-Score</h3>
+            <h3>F1-Score</h3>
             <h2 style="color:{color}">{models['f1']:.1%}</h2>
         </div>
         """, unsafe_allow_html=True)
     
-    # ROC-AUC si está disponible
     if models['is_binary'] and models['auc'] > 0:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             color = "#2ecc71" if models['auc'] > 0.8 else "#f39c12" if models['auc'] > 0.6 else "#e74c3c"
             st.markdown(f"""
             <div class="metric-card">
-                <h3>📈 ROC-AUC</h3>
+                <h3>ROC-AUC</h3>
                 <h2 style="color:{color}">{models['auc']:.1%}</h2>
             </div>
             """, unsafe_allow_html=True)
@@ -449,15 +437,15 @@ if st.session_state.model_trained and st.session_state.step == 3:
     # Diagnóstico
     st.markdown("---")
     if models['accuracy'] > 0.9:
-        st.success("✅ **Excelente** - El modelo tiene un rendimiento excepcional")
+        st.success("Excelente - El modelo tiene un rendimiento excepcional")
     elif models['accuracy'] > 0.8:
-        st.success("✅ **Bueno** - El modelo funciona correctamente")
+        st.success("Bueno - El modelo funciona correctamente")
     elif models['accuracy'] > 0.7:
-        st.warning("⚠️ **Aceptable** - El modelo tiene margen de mejora")
+        st.warning("Aceptable - El modelo tiene margen de mejora")
     else:
-        st.error("❌ **Mejorable** - Considera cambiar features o algoritmo")
+        st.error("Mejorable - Considera cambiar features o algoritmo")
     
-    # Gráficas más pequeñas
+    # Gráficas
     col1, col2 = st.columns(2)
     
     with col1:
@@ -490,20 +478,20 @@ if st.session_state.model_trained and st.session_state.step == 3:
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🔄 Reiniciar", use_container_width=True):
+        if st.button("Reiniciar", use_container_width=True):
             for key in ['df', 'model_trained', 'models', 'step']:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
     
     with col2:
-        if st.button("🔍 Hacer Predicciones", type="primary", use_container_width=True):
+        if st.button("Hacer Predicciones", type="primary", use_container_width=True):
             st.session_state.step = 4
             st.rerun()
 
 # ==================== PASO 4: PREDICCIONES ====================
 if st.session_state.model_trained and st.session_state.step == 4:
-    st.header("🔍 Paso 4: Predicción")
+    st.header("Paso 4: Predicción")
     
     models = st.session_state.models
     df = st.session_state.df
@@ -536,7 +524,7 @@ if st.session_state.model_trained and st.session_state.step == 4:
                             key=f"cat_{feature}"
                         )
         
-        submitted = st.form_submit_button("🔍 Predecir", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("Predecir", use_container_width=True, type="primary")
         
         if submitted:
             try:
@@ -564,7 +552,7 @@ if st.session_state.model_trained and st.session_state.step == 4:
                     
                     if prediction == 1:
                         st.error(f"""
-                        ### 🚨 Predicción: FRAUDE
+                        ### Predicción: FRAUDE
                         
                         | Métrica | Valor |
                         |---|---|
@@ -574,30 +562,30 @@ if st.session_state.model_trained and st.session_state.step == 4:
                         """)
                     else:
                         st.success(f"""
-                        ### ✅ Predicción: LEGÍTIMO
+                        ### Predicción: LEGITIMO
                         
                         | Métrica | Valor |
                         |---|---|
-                        | **Predicción** | Legítimo (Clase 0) |
+                        | **Predicción** | Legitimo (Clase 0) |
                         | **Confianza** | {1-prob_positive:.1%} |
                         | **Modelo** | {models['model_type']} |
                         """)
                 else:
                     st.info(f"""
-                    ### 📊 Resultado
+                    ### Resultado
                     
                     **Predicción:** {prediction}
                     **Modelo:** {models['model_type']}
                     """)
                 
             except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+                st.error(f"Error: {str(e)}")
     
     st.markdown("---")
-    if st.button("← Volver"):
+    if st.button("Volver"):
         st.session_state.step = 3
         st.rerun()
 
-# ==================== FOOTER ====================
+# Footer
 st.markdown("---")
-st.markdown("<p style='text-align:center;color:gray;font-size:12px'>Sistema de Detección de Fraude | Streamlit</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:gray;font-size:12px'>Sistema de Detección de Fraude Bancario</p>", unsafe_allow_html=True)
