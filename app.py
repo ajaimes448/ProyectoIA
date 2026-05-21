@@ -1,5 +1,3 @@
-# app.py - Aplicación de Detección de Fraude Bancario
-
 import streamlit as st
 import pandas as pd
 import numpy as np
