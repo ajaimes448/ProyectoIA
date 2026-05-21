@@ -1,5 +1,5 @@
 # model.py - Sistema de Detección de Fraude Bancario
-# --- SÍNTESIS Y MODULARIZACIÓN ---
+# Versión COMPLETA y CORREGIDA
 
 import pandas as pd
 import numpy as np
@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
-def generate_sample_data(n_samples=10000, random_state=42):
+def generate_sample_data(n_samples=5000, random_state=42):
     """Genera datos de ejemplo para detección de fraude"""
     np.random.seed(random_state)
     data = {
@@ -100,8 +100,8 @@ def train_models_pipeline(df):
     
     # ==================== MODELO ORIGINAL ====================
     model_orig = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=15,
+        n_estimators=50,  # Reducido para mejor rendimiento
+        max_depth=10,
         min_samples_split=5,
         min_samples_leaf=2,
         max_features='sqrt',
@@ -113,7 +113,7 @@ def train_models_pipeline(df):
     model_orig.fit(x_train, y_train)
     
     # ==================== MODELO CON PCA ====================
-    n_components = min(10, len(numerical_cols))
+    n_components = min(5, len(numerical_cols))  # Reducido para mejor rendimiento
     pca = PCA(n_components=n_components, random_state=RANDOM_STATE)
     X_pca_train = pca.fit_transform(x_train[numerical_cols])
     X_pca_test = pca.transform(x_test[numerical_cols])
@@ -130,7 +130,7 @@ def train_models_pipeline(df):
         X_pca_test_combined = X_pca_test
     
     model_pca = RandomForestClassifier(
-        n_estimators=100, max_depth=15, min_samples_split=5,
+        n_estimators=50, max_depth=10, min_samples_split=5,
         min_samples_leaf=2, max_features='sqrt', bootstrap=True,
         class_weight='balanced', random_state=RANDOM_STATE, n_jobs=-1
     )
@@ -155,7 +155,7 @@ def train_models_pipeline(df):
                 X_lda_test_combined = X_lda_test
             
             model_lda = RandomForestClassifier(
-                n_estimators=100, max_depth=15, min_samples_split=5,
+                n_estimators=50, max_depth=10, min_samples_split=5,
                 min_samples_leaf=2, max_features='sqrt', bootstrap=True,
                 class_weight='balanced', random_state=RANDOM_STATE, n_jobs=-1
             )
@@ -224,7 +224,7 @@ def predict_transaction(models, transaction_data):
     # Asegurar el orden de las columnas
     input_df = input_df[models['feature_names']]
     
-    # Predicciones
+    # Predicción modelo original
     pred_orig = models['model'].predict(input_df)[0]
     prob_orig = models['model'].predict_proba(input_df)[0][1]
     
