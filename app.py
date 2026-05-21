@@ -1,5 +1,5 @@
 # app.py - Sistema de Detección de Fraude Bancario
-# VERSION SIN EMOJIS NI STICKERS
+# VERSION SIN EMOJIS NI STICKERS - PCA ILIMITADO, LDA FIJO 1 COMPONENTE
 
 import streamlit as st
 import pandas as pd
@@ -260,10 +260,27 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
         )
     
     with col4:
-        if reduction_method != "Ninguna":
-            n_components = st.number_input("Componentes:", 2, 10, 3)
+        # Configuración diferente para PCA y LDA
+        if reduction_method == "PCA":
+            # PCA: sin límite máximo - se puede poner hasta el número de features
+            max_possible = len(selected_features)
+            if max_possible > 0:
+                n_components = st.number_input(
+                    "Componentes PCA:", 
+                    min_value=2, 
+                    max_value=max_possible, 
+                    value=min(3, max_possible),
+                    help=f"PCA puede usar hasta {max_possible} componentes (número de features)"
+                )
+            else:
+                n_components = 3
+        elif reduction_method == "LDA":
+            # LDA: fijo a 1 componente (para clasificación binaria o multiclase)
+            n_components = 1
+            st.info("LDA utiliza 1 componente (máximo permitido es n_clases - 1)")
         else:
             n_components = 3
+            st.caption("Sin reducción aplicada")
     
     # Botón de entrenamiento
     if st.button("Entrenar Modelo", type="primary", use_container_width=True):
@@ -302,27 +319,35 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                 actual_reduction_method = reduction_method
                 
                 if reduction_method == "PCA":
+                    # PCA: usar el número de componentes seleccionado por el usuario
                     n_comp = min(n_components, len(selected_features), X_train.shape[1])
-                    if n_comp >= 1:
+                    if n_comp >= 2:
                         reduction_obj = PCA(n_components=n_comp, random_state=42)
                         X_train = reduction_obj.fit_transform(X_train)
                         X_test = reduction_obj.transform(X_test)
+                        st.info(f"PCA aplicado con {n_comp} componentes")
                     else:
                         actual_reduction_method = "Ninguna"
+                        st.warning(f"No se pudo aplicar PCA con {n_components} componentes. Usando sin reducción.")
                 
                 elif reduction_method == "LDA":
+                    # LDA: forzar a 1 componente
                     try:
                         n_classes = len(np.unique(y_train))
                         max_components = min(n_classes - 1, X_train.shape[1])
                         if max_components >= 1:
-                            n_comp = min(n_components, max_components)
+                            # Forzar a 1 componente independientemente de lo que seleccione el usuario
+                            n_comp = 1
                             reduction_obj = LDA(n_components=n_comp)
                             X_train = reduction_obj.fit_transform(X_train, y_train)
                             X_test = reduction_obj.transform(X_test)
+                            st.info(f"LDA aplicado con 1 componente (máximo teórico: {max_components})")
                         else:
                             actual_reduction_method = "Ninguna"
-                    except Exception:
+                            st.warning("LDA requiere al menos 2 clases. Usando sin reducción.")
+                    except Exception as e:
                         actual_reduction_method = "Ninguna"
+                        st.warning(f"LDA no aplicable: {str(e)[:50]}. Usando sin reducción.")
                 
                 # Modelo
                 if model_type == "Random Forest":
