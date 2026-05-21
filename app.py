@@ -1,5 +1,5 @@
 # app.py - Sistema de Detección de Fraude Bancario
-# VERSION CORREGIDA CON METRICAS EN NEGRO Y EXPLICACIONES
+# VERSION SIN EMOJIS NI STICKERS
 
 import streamlit as st
 import pandas as pd
@@ -409,7 +409,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
     # Información
     st.info(f"**Modelo:** {models['model_type']} | **Reducción:** {models['reduction_method']} | **Target:** {models['target_column']}")
     
-    # Métricas con letras negras y explicaciones
+    # Métricas con letras negras y explicaciones sin emojis
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -418,7 +418,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>Accuracy</h3>
             <h2 style="color:{color}">{models['accuracy']:.1%}</h2>
-            <p>✅ Proporción de predicciones correctas (VP+VN)/(Total)</p>
+            <p>Proporcion de predicciones correctas (VP+VN)/(Total)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -428,7 +428,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>Precision</h3>
             <h2 style="color:{color}">{models['precision']:.1%}</h2>
-            <p>🎯 De los que predijo fraude, ¿cuántos eran realmente fraude? VP/(VP+FP)</p>
+            <p>De los que predijo fraude, cuantos eran realmente fraude VP/(VP+FP)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -438,7 +438,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>Recall</h3>
             <h2 style="color:{color}">{models['recall']:.1%}</h2>
-            <p>🔍 De los fraudes reales, ¿cuántos detectó? VP/(VP+FN)</p>
+            <p>De los fraudes reales, cuantos detecto VP/(VP+FN)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -448,7 +448,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>F1-Score</h3>
             <h2 style="color:{color}">{models['f1']:.1%}</h2>
-            <p>⚖️ Balance entre Precision y Recall (Media armónica)</p>
+            <p>Balance entre Precision y Recall (Media armonica)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -460,7 +460,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
             <div class="metric-card">
                 <h3>ROC-AUC</h3>
                 <h2 style="color:{color}">{models['auc']:.1%}</h2>
-                <p>📊 Capacidad para distinguir entre fraude y legítimo (1=perfecto, 0.5=aleatorio)</p>
+                <p>Capacidad para distinguir entre fraude y legitimo (1=perfecto, 0.5=aleatorio)</p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -479,13 +479,13 @@ if st.session_state.model_trained and st.session_state.step == 3:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**Matriz de Confusión**")
+        st.markdown("**Matriz de Confusion**")
         fig, ax = plt.subplots(figsize=(4, 3))
         cm = confusion_matrix(models['y_test'], models['y_pred'])
         # Forzar números en negro
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, cbar=False,
                    annot_kws={'color': 'black', 'size': 10, 'weight': 'bold'})
-        ax.set_xlabel('Predicción', fontsize=8, color='black')
+        ax.set_xlabel('Prediccion', fontsize=8, color='black')
         ax.set_ylabel('Real', fontsize=8, color='black')
         ax.tick_params(labelsize=8, colors='black')
         st.pyplot(fig)
@@ -523,7 +523,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
 
 # ==================== PASO 4: PREDICCIONES ====================
 if st.session_state.model_trained and st.session_state.step == 4:
-    st.header("Paso 4: Predicción")
+    st.header("Paso 4: Prediccion")
     
     models = st.session_state.models
     df = st.session_state.df
@@ -533,7 +533,7 @@ if st.session_state.model_trained and st.session_state.step == 4:
         input_data = {}
         
         with col1:
-            st.markdown("**Variables Numéricas**")
+            st.markdown("**Variables Numericas**")
             for feature in models['selected_numeric']:
                 default_val = float(df[feature].mean()) if feature in df.columns else 0.0
                 input_data[feature] = st.number_input(
@@ -546,7 +546,7 @@ if st.session_state.model_trained and st.session_state.step == 4:
         
         with col2:
             if models['selected_categorical']:
-                st.markdown("**Variables Categóricas**")
+                st.markdown("**Variables Categoricas**")
                 for feature in models['selected_categorical']:
                     if feature in df.columns:
                         unique_values = df[feature].dropna().unique().tolist()
@@ -584,21 +584,21 @@ if st.session_state.model_trained and st.session_state.step == 4:
                     
                     if prediction == 1:
                         st.error(f"""
-                        ### Predicción: FRAUDE
+                        ### Prediccion: FRAUDE
                         
-                        | Métrica | Valor |
+                        | Metrica | Valor |
                         |---|---|
-                        | **Predicción** | Fraude (Clase 1) |
+                        | **Prediccion** | Fraude (Clase 1) |
                         | **Confianza** | {prob_positive:.1%} |
                         | **Modelo** | {models['model_type']} |
                         """)
                     else:
                         st.success(f"""
-                        ### Predicción: LEGITIMO
+                        ### Prediccion: LEGITIMO
                         
-                        | Métrica | Valor |
+                        | Metrica | Valor |
                         |---|---|
-                        | **Predicción** | Legitimo (Clase 0) |
+                        | **Prediccion** | Legitimo (Clase 0) |
                         | **Confianza** | {1-prob_positive:.1%} |
                         | **Modelo** | {models['model_type']} |
                         """)
@@ -606,7 +606,7 @@ if st.session_state.model_trained and st.session_state.step == 4:
                     st.info(f"""
                     ### Resultado
                     
-                    **Predicción:** {prediction}
+                    **Prediccion:** {prediction}
                     **Modelo:** {models['model_type']}
                     """)
                 
@@ -620,4 +620,4 @@ if st.session_state.model_trained and st.session_state.step == 4:
 
 # Footer
 st.markdown("---")
-st.markdown("<p style='text-align:center;color:gray;font-size:12px'>Sistema de Detección de Fraude Bancario</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:gray;font-size:12px'>Sistema de Deteccion de Fraude Bancario</p>", unsafe_allow_html=True)
