@@ -1,5 +1,5 @@
 # app.py - Sistema de Detección de Fraude Bancario
-# VERSIÓN SIN EMOJIS
+# VERSION CORREGIDA CON METRICAS EN NEGRO Y EXPLICACIONES
 
 import streamlit as st
 import pandas as pd
@@ -28,7 +28,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo
+# Estilo mejorado
 st.markdown("""
 <style>
     [data-testid="stImage"] {
@@ -40,14 +40,22 @@ st.markdown("""
         border-radius: 8px;
         text-align: center;
         margin: 0.2rem;
+        min-height: 130px;
     }
     .metric-card h3 {
         font-size: 0.9rem;
-        margin: 0;
+        margin: 0 0 5px 0;
+        color: black !important;
     }
     .metric-card h2 {
         font-size: 1.5rem;
-        margin: 0;
+        margin: 5px 0;
+    }
+    .metric-card p {
+        font-size: 10px;
+        color: #555;
+        margin-top: 8px;
+        line-height: 1.3;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -58,6 +66,7 @@ if 'model_trained' not in st.session_state:
     st.session_state.df = None
     st.session_state.models = None
     st.session_state.step = 1
+    st.session_state.convert_to_binary = False
 
 # Título
 st.title("Sistema de Detección de Fraude Bancario")
@@ -188,6 +197,7 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
             pct = (count / len(df)) * 100
             st.write(f"- {val}: {count} ({pct:.1f}%)")
     
+    convert_to_binary = False
     if unique_values > 2:
         convert_to_binary = st.checkbox("Convertir a binario (0/1)")
         if convert_to_binary:
@@ -262,9 +272,12 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                 X = df[selected_features].copy()
                 y = df[target_column].copy()
                 
-                if 'convert_to_binary' in locals() and convert_to_binary and unique_values > 2:
+                if convert_to_binary and unique_values > 2:
                     most_frequent = df[target_column].mode()[0]
                     y = (y != most_frequent).astype(int)
+                    st.session_state.convert_to_binary = True
+                else:
+                    st.session_state.convert_to_binary = False
                 
                 # Codificar categóricas
                 encoders = {}
@@ -286,24 +299,30 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                 
                 # Reducción
                 reduction_obj = None
+                actual_reduction_method = reduction_method
+                
                 if reduction_method == "PCA":
                     n_comp = min(n_components, len(selected_features), X_train.shape[1])
-                    reduction_obj = PCA(n_components=n_comp, random_state=42)
-                    X_train = reduction_obj.fit_transform(X_train)
-                    X_test = reduction_obj.transform(X_test)
+                    if n_comp >= 1:
+                        reduction_obj = PCA(n_components=n_comp, random_state=42)
+                        X_train = reduction_obj.fit_transform(X_train)
+                        X_test = reduction_obj.transform(X_test)
+                    else:
+                        actual_reduction_method = "Ninguna"
                 
                 elif reduction_method == "LDA":
                     try:
-                        max_components = min(len(np.unique(y_train)) - 1, X_train.shape[1])
+                        n_classes = len(np.unique(y_train))
+                        max_components = min(n_classes - 1, X_train.shape[1])
                         if max_components >= 1:
                             n_comp = min(n_components, max_components)
                             reduction_obj = LDA(n_components=n_comp)
                             X_train = reduction_obj.fit_transform(X_train, y_train)
                             X_test = reduction_obj.transform(X_test)
                         else:
-                            reduction_method = "Ninguna"
+                            actual_reduction_method = "Ninguna"
                     except Exception:
-                        reduction_method = "Ninguna"
+                        actual_reduction_method = "Ninguna"
                 
                 # Modelo
                 if model_type == "Random Forest":
@@ -313,7 +332,7 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                 elif model_type == "Decision Tree":
                     model = DecisionTreeClassifier(max_depth=10, random_state=42)
                 else:
-                    if reduction_method != "Ninguna" or len(selected_numeric) > 0:
+                    if actual_reduction_method != "Ninguna" or len(selected_numeric) > 0:
                         model = GaussianNB()
                     else:
                         model = BernoulliNB()
@@ -326,17 +345,23 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                 # Métricas
                 accuracy = accuracy_score(y_test, y_pred)
                 
-                if len(np.unique(y_train)) == 2:
+                is_binary = len(np.unique(y_train)) == 2
+                
+                if is_binary:
                     precision = precision_score(y_test, y_pred, zero_division=0)
                     recall = recall_score(y_test, y_pred, zero_division=0)
                     f1 = f1_score(y_test, y_pred, zero_division=0)
                     
                     try:
-                        y_pred_proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else y_pred
-                        auc = roc_auc_score(y_test, y_pred_proba)
+                        if hasattr(model, "predict_proba"):
+                            y_pred_proba = model.predict_proba(X_test)[:, 1]
+                            auc = roc_auc_score(y_test, y_pred_proba)
+                        else:
+                            y_pred_proba = None
+                            auc = 0.0
                     except:
-                        auc = 0.0
                         y_pred_proba = None
+                        auc = 0.0
                 else:
                     precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
                     recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
@@ -350,7 +375,7 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                     'scaler': scaler,
                     'encoders': encoders,
                     'reduction_obj': reduction_obj,
-                    'reduction_method': reduction_method,
+                    'reduction_method': actual_reduction_method,
                     'selected_features': selected_features,
                     'selected_numeric': selected_numeric,
                     'selected_categorical': selected_categorical,
@@ -361,7 +386,7 @@ if st.session_state.df is not None and st.session_state.step == 2 and not st.ses
                     'recall': recall,
                     'f1': f1,
                     'auc': auc,
-                    'is_binary': len(np.unique(y_train)) == 2,
+                    'is_binary': is_binary,
                     'X_test': X_test,
                     'y_test': y_test,
                     'y_pred': y_pred,
@@ -384,7 +409,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
     # Información
     st.info(f"**Modelo:** {models['model_type']} | **Reducción:** {models['reduction_method']} | **Target:** {models['target_column']}")
     
-    # Métricas
+    # Métricas con letras negras y explicaciones
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -393,6 +418,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>Accuracy</h3>
             <h2 style="color:{color}">{models['accuracy']:.1%}</h2>
+            <p>✅ Proporción de predicciones correctas (VP+VN)/(Total)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -402,6 +428,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>Precision</h3>
             <h2 style="color:{color}">{models['precision']:.1%}</h2>
+            <p>🎯 De los que predijo fraude, ¿cuántos eran realmente fraude? VP/(VP+FP)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -411,6 +438,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>Recall</h3>
             <h2 style="color:{color}">{models['recall']:.1%}</h2>
+            <p>🔍 De los fraudes reales, ¿cuántos detectó? VP/(VP+FN)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -420,6 +448,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
         <div class="metric-card">
             <h3>F1-Score</h3>
             <h2 style="color:{color}">{models['f1']:.1%}</h2>
+            <p>⚖️ Balance entre Precision y Recall (Media armónica)</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -431,6 +460,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
             <div class="metric-card">
                 <h3>ROC-AUC</h3>
                 <h2 style="color:{color}">{models['auc']:.1%}</h2>
+                <p>📊 Capacidad para distinguir entre fraude y legítimo (1=perfecto, 0.5=aleatorio)</p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -445,17 +475,19 @@ if st.session_state.model_trained and st.session_state.step == 3:
     else:
         st.error("Mejorable - Considera cambiar features o algoritmo")
     
-    # Gráficas
+    # Gráficas con números en negro
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("**Matriz de Confusión**")
         fig, ax = plt.subplots(figsize=(4, 3))
         cm = confusion_matrix(models['y_test'], models['y_pred'])
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, cbar=False)
-        ax.set_xlabel('Predicción', fontsize=8)
-        ax.set_ylabel('Real', fontsize=8)
-        ax.tick_params(labelsize=8)
+        # Forzar números en negro
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, cbar=False,
+                   annot_kws={'color': 'black', 'size': 10, 'weight': 'bold'})
+        ax.set_xlabel('Predicción', fontsize=8, color='black')
+        ax.set_ylabel('Real', fontsize=8, color='black')
+        ax.tick_params(labelsize=8, colors='black')
         st.pyplot(fig)
         plt.close()
     
@@ -479,7 +511,7 @@ if st.session_state.model_trained and st.session_state.step == 3:
     
     with col1:
         if st.button("Reiniciar", use_container_width=True):
-            for key in ['df', 'model_trained', 'models', 'step']:
+            for key in ['df', 'model_trained', 'models', 'step', 'convert_to_binary']:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
