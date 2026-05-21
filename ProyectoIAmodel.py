@@ -1,5 +1,5 @@
 # model.py - Sistema de Detección de Fraude Bancario
-# Versión COMPLETA y CORREGIDA
+# VERSIÓN DEFINITIVA Y FUNCIONAL
 
 import pandas as pd
 import numpy as np
@@ -80,12 +80,7 @@ def preprocess_data(df):
     return df_encoded, encoders, scaler, numerical_cols, categorical_cols
 
 def train_models_pipeline(df):
-    """
-    Entrena los modelos de detección de fraude:
-    - Random Forest original
-    - Random Forest con PCA
-    - Random Forest con LDA
-    """
+    """Entrena los modelos de detección de fraude"""
     # Preprocesar datos
     df_encoded, encoders, scaler, numerical_cols, categorical_cols = preprocess_data(df)
     
@@ -98,27 +93,20 @@ def train_models_pipeline(df):
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
     
-    # ==================== MODELO ORIGINAL ====================
+    # Modelo ORIGINAL
     model_orig = RandomForestClassifier(
-        n_estimators=50,  # Reducido para mejor rendimiento
-        max_depth=10,
-        min_samples_split=5,
-        min_samples_leaf=2,
-        max_features='sqrt',
-        bootstrap=True,
-        class_weight='balanced',
-        random_state=RANDOM_STATE,
-        n_jobs=-1
+        n_estimators=50, max_depth=10, min_samples_split=5,
+        min_samples_leaf=2, max_features='sqrt', bootstrap=True,
+        class_weight='balanced', random_state=RANDOM_STATE, n_jobs=-1
     )
     model_orig.fit(x_train, y_train)
     
-    # ==================== MODELO CON PCA ====================
-    n_components = min(5, len(numerical_cols))  # Reducido para mejor rendimiento
+    # Modelo con PCA
+    n_components = min(5, len(numerical_cols))
     pca = PCA(n_components=n_components, random_state=RANDOM_STATE)
     X_pca_train = pca.fit_transform(x_train[numerical_cols])
     X_pca_test = pca.transform(x_test[numerical_cols])
     
-    # Combinar componentes PCA con variables categóricas
     categorical_train = x_train[categorical_cols].values if len(categorical_cols) > 0 else np.array([]).reshape(len(x_train), 0)
     categorical_test = x_test[categorical_cols].values if len(categorical_cols) > 0 else np.array([]).reshape(len(x_test), 0)
     
@@ -136,7 +124,7 @@ def train_models_pipeline(df):
     )
     model_pca.fit(X_pca_train_combined, y_train)
     
-    # ==================== MODELO CON LDA ====================
+    # Modelo con LDA
     model_lda = None
     lda = None
     X_lda_test_combined = None
@@ -160,88 +148,67 @@ def train_models_pipeline(df):
                 class_weight='balanced', random_state=RANDOM_STATE, n_jobs=-1
             )
             model_lda.fit(X_lda_train_combined, y_train)
-    except Exception as e:
-        print(f"Error entrenando LDA: {e}")
+    except:
         model_lda = None
         lda = None
-        X_lda_test_combined = None
     
-    # ==================== RETORNAR TODOS LOS MODELOS Y COMPONENTES ====================
+    # Retornar todo
     return {
-        # Modelos
         'model': model_orig,
         'model_pca': model_pca,
         'model_lda': model_lda,
-        
-        # Transformadores
         'pca': pca,
         'lda': lda,
         'scaler': scaler,
         'encoders': encoders,
-        
-        # Metadata
         'numerical_cols': numerical_cols,
         'categorical_cols': categorical_cols,
-        
-        # Datos de prueba - Modelo Original
         'x_test': x_test,
         'y_test': y_test,
-        
-        # Datos de prueba - PCA
         'x_test_pca': X_pca_test_combined,
         'y_test_pca': y_test,
-        
-        # Datos de prueba - LDA
         'x_test_lda': X_lda_test_combined,
         'y_test_lda': y_test if model_lda is not None else None,
-        
-        # Feature names completos (para consistencia)
         'feature_names': x_test.columns.tolist()
     }
 
 def predict_transaction(models, transaction_data):
-    """
-    Predice si una nueva transacción es fraudulenta usando los modelos entrenados.
-    
-    Args:
-        models: Diccionario retornado por train_models_pipeline
-        transaction_data: Diccionario con los datos de la transacción
-    
-    Returns:
-        Diccionario con predicciones y probabilidades
-    """
+    """Predice si una transacción es fraudulenta"""
     # Convertir a DataFrame
     input_df = pd.DataFrame([transaction_data])
     
-    # Aplicar codificación a variables categóricas
+    # Codificar categóricas
     for col in models['categorical_cols']:
         if col in input_df.columns and col in models['encoders']:
             input_df[col] = models['encoders'][col].transform(input_df[col].astype(str))
+        elif col in input_df.columns:
+            # Si no hay encoder, asignar 0
+            input_df[col] = 0
     
-    # Aplicar escalado a variables numéricas
+    # Escalar numéricas
     input_df[models['numerical_cols']] = models['scaler'].transform(input_df[models['numerical_cols']])
     
-    # Asegurar el orden de las columnas
+    # Reordenar columnas
     input_df = input_df[models['feature_names']]
     
-    # Predicción modelo original
+    # Predicción original
     pred_orig = models['model'].predict(input_df)[0]
     prob_orig = models['model'].predict_proba(input_df)[0][1]
     
-    # Predicción con PCA
+    # Predicción PCA
     X_pca = models['pca'].transform(input_df[models['numerical_cols']])
+    categorical_input = input_df[models['categorical_cols']].values if len(models['categorical_cols']) > 0 else np.array([]).reshape(len(input_df), 0)
     if len(models['categorical_cols']) > 0:
-        categorical_input = input_df[models['categorical_cols']].values
         X_pca_combined = np.concatenate([X_pca, categorical_input], axis=1)
     else:
         X_pca_combined = X_pca
     pred_pca = models['model_pca'].predict(X_pca_combined)[0]
     prob_pca = models['model_pca'].predict_proba(X_pca_combined)[0][1]
     
-    # Predicción con LDA
+    # Predicción LDA
     pred_lda = pred_orig
     prob_lda = prob_orig
-    if models['model_lda'] is not None and models['lda'] is not None:
+    if models['model_lda'] is not None:
         X_lda = models['lda'].transform(input_df[models['numerical_cols']])
         if len(models['categorical_cols']) > 0:
             X_lda_combined = np.concatenate([X_lda, categorical_input], axis=1)
